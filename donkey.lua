@@ -1,4 +1,4 @@
---
+-- --------------------------------
 -- Copyright (c) 2017, Jaewoo Song.
 -- All rights reserved.
 -- This code is forked from soumith/imagenet-multiGPU.torch
@@ -10,7 +10,10 @@
 --  This source code is licensed under the BSD-style license found in the
 --  LICENSE file in the root directory of this source tree. An additional grant
 --  of patent rights can be found in the PATENTS file in the same directory.
---
+-- -------------------------------------------------------------------------
+-- 이 파일은 soumith/imagenet-multiGPU.torch 에서 포크해온 파일입니다.
+-- 원본과 똑같은 라이센스가 사용됩니다.
+-- ------------------------------------
 
 require 'image'
 paths.dofile('dataset.lua')
@@ -58,46 +61,51 @@ end
 
 -- 각 채널의 평균과 표준편차. 계산하거나 혹은 코드의 뒷부분에서 디스크에서 불러옵니다.
 local 평균, 표준편차
+
 --------------------------------------------------------------------------------
+
 --[[
-   Section 1: Create a train data loader (trainLoader),
-   which does class-balanced sampling from the dataset and does a random crop
+    항목 1: 학습 데이터를 불러오는 기능을 만듭니다. (trainLoader)
+            클래스 간 균형을 맞추어 데이터 셋 샘플링을 하고, 무작위 크롭도 합니다.
 --]]
 
--- function to load the image, jitter it appropriately (random crops etc.)
+-- 사진을 불러오고 적당히 변형하는 함수 (무작위 크롭 등)
 local trainHook = function(self, path)
    collectgarbage()
-   local input = loadImage(path)
-   local iW = input:size(3)
-   local iH = input:size(2)
+   local 입력사진 = loadImage(path) -- 위에서 만든 함수입니다.
+   local 입력가로 = 입력사진:size(3)
+   local 입력세로 = 입력사진:size(2)
 
-   -- do random crop
-   local oW = sampleSize[3]
-   local oH = sampleSize[2]
-   local h1 = math.ceil(torch.uniform(1e-2, iH-oH))
-   local w1 = math.ceil(torch.uniform(1e-2, iW-oW))
-   local out = image.crop(input, w1, h1, w1 + oW, h1 + oH)
-   assert(out:size(3) == oW)
-   assert(out:size(2) == oH)
-   -- do hflip with probability 0.5
-   if torch.uniform() > 0.5 then out = image.hflip(out) end
-   -- mean/std
-   for i=1,3 do -- channels
-      if mean then out[{{i},{},{}}]:add(-mean[i]) end
-      if std then out[{{i},{},{}}]:div(std[i]) end
+   -- 무작위 크롭
+   local 출력가로 = sampleSize[3]
+   local 출력세로 = sampleSize[2]
+   local 세로좌표1 = math.ceil(torch.uniform(1e-2, 입력세로-출력세로))
+   local 가로좌표1 = math.ceil(torch.uniform(1e-2, 입력가로-출력가로))
+   local 출력사진 = image.crop(입력사진, 가로좌표1, 세로좌표1,
+                               가로좌표1 + 출력가로, 세로좌표1 + 출력세로)
+   assert(출력사진:size(3) == 출력가로)
+   assert(출력사진:size(2) == 출력세로)
+
+   -- 0.5의 확률로 가로방향 뒤집기를 합니다.
+   if torch.uniform() > 0.5 then 출력사진 = image.hflip(출력사진) end
+
+   -- 평균, 표준편차
+   for i=1,3 do -- 채널
+      if 평균 then 출력사진[{{i},{},{}}]:add(-평균[i]) end
+      if 표준편차 then 출력사진[{{i},{},{}}]:div(표준편차[i]) end
    end
-   return out
+   return 출력사진
 end
 
 if paths.filep(trainCache) then
-   print('Loading train metadata from cache')
-   trainLoader = torch.load(trainCache)
+   print('캐시에서 학습 메타데이터를 불러옵니다.')
+   trainLoader = torch.load(trainCache) -- 중요한 변수
    trainLoader.sampleHookTrain = trainHook
    assert(trainLoader.paths[1] == paths.concat(opt.data, 'train'),
-          'cached files dont have the same path as opt.data. Remove your cached files at: '
-             .. trainCache .. ' and rerun the program')
+          '캐시 파일의 내용이 opt.data와 경로가 다릅니다. '
+             .. trainCache .. '에 있는 캐시를 지우고 프로그램을 다시 실행합니다.')
 else
-   print('Creating train metadata')
+   print('학습 메타데이터를 생성합니다.')
    trainLoader = dataLoader{
       paths = {paths.concat(opt.data, 'train')},
       loadSize = loadSize,
@@ -110,12 +118,12 @@ else
 end
 collectgarbage()
 
--- do some sanity checks on trainLoader
+-- trainLoader가 정상적으로 동작하는지 확인
 do
    local class = trainLoader.imageClass
    local nClasses = #trainLoader.classes
-   assert(class:max() <= nClasses, "class logic has error")
-   assert(class:min() >= 1, "class logic has error")
+   assert(class:max() <= nClasses, "클래스 구조에 문제가 있습니다.")
+   assert(class:min() >= 1, "클래스 구조에 문제가 있습니다.")
 
 end
 
