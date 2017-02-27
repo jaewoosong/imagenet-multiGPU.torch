@@ -1,4 +1,9 @@
 --
+-- Copyright (c) 2017, Jaewoo Song.
+-- All rights reserved.
+-- This code is forked from soumith/imagenet-multiGPU.torch
+-- and follows its licence (which is just below).
+-- ----------------------------------------------
 --  Copyright (c) 2014, Facebook, Inc.
 --  All rights reserved.
 --
@@ -6,41 +11,53 @@
 --  LICENSE file in the root directory of this source tree. An additional grant
 --  of patent rights can be found in the PATENTS file in the same directory.
 --
+
 require 'image'
 paths.dofile('dataset.lua')
 paths.dofile('util.lua')
 
--- This file contains the data-loading logic and details.
--- It is run by each data-loader thread.
-------------------------------------------
+-- 데이터를 불러오는 데에 사용되는 파일입니다.
+-- 데이터를 불러오는 각각의 스레드에서 실행됩니다.
+--------------------------------------------------
 
--- a cache file of the training metadata (if doesnt exist, will be created)
-local trainCache = paths.concat(opt.cache, 'trainCache.t7')
-local testCache = paths.concat(opt.cache, 'testCache.t7')
+-- 학습 메타데이터에 대한 캐시 파일 (없으면 생성됨)
+local trainCache   = paths.concat(opt.cache, 'trainCache.t7')
+local testCache    = paths.concat(opt.cache, 'testCache.t7')
 local meanstdCache = paths.concat(opt.cache, 'meanstdCache.t7')
 
--- Check for existence of opt.data
+-- 데이터 디렉토리(opt.data)가 있는지 검사
 if not os.execute('cd ' .. opt.data) then
-    error(("could not chdir to '%s'"):format(opt.data))
+    error(("디렉토리를 '%s' 으로 바꿀 수 없습니다."):format(opt.data))
 end
 
 local loadSize   = {3, opt.imageSize, opt.imageSize}
 local sampleSize = {3, opt.cropSize, opt.cropSize}
 
+local function loadImage(경로)
+   -- 'double', 'float', 'byte' 사용 가능
+   local 사진 = image.load(경로, 3, 'float')
 
-local function loadImage(path)
-   local input = image.load(path, 3, 'float')
-   -- find the smaller dimension, and resize it to loadSize (while keeping aspect ratio)
-   if input:size(3) < input:size(2) then
-      input = image.scale(input, loadSize[2], loadSize[3] * input:size(2) / input:size(3))
-   else
-      input = image.scale(input, loadSize[2] * input:size(3) / input:size(2), loadSize[3])
+   -- 사진 원본의 가로와 세로 
+   local 가로 = 사진:size(3)
+   local 세로 = 사진:size(2)
+
+   -- 학습에 필요한 사진 크기
+   local 가로변환 = loadSize[2]
+   local 세로변환 = loadSize[3]
+
+   -- 짧은 쪽을 찾아서 비율을 유지하면서 학습에 필요한 크기로 사진 변환
+   if 가로 < 세로 then -- 위아래로 길쭉한 사진이면
+      사진 = image.scale(사진, 가로변환, 세로변환 * 세로 / 가로)
+   else -- 옆으로 길쭉한 사진이면
+      사진 = image.scale(사진, 가로변환 * 가로 / 세로, 세로변환)
    end
-   return input
+
+   -- 결과값 반환
+   return 사진
 end
 
--- channel-wise mean and std. Calculate or load them from disk later in the script.
-local mean,std
+-- 각 채널의 평균과 표준편차. 계산하거나 혹은 코드의 뒷부분에서 디스크에서 불러옵니다.
+local 평균, 표준편차
 --------------------------------------------------------------------------------
 --[[
    Section 1: Create a train data loader (trainLoader),
